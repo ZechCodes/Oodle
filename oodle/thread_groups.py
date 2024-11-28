@@ -16,7 +16,7 @@ class ThreadGroup:
     def __exit__(self, exc_type, exc_val, exc_tb):
         while self._threads:
             thread = self._threads.pop()
-            if thread.is_alive():
-                thread.join()
+            if thread.is_alive:
+                thread.wait()
 
         return True

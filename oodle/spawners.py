@@ -1,4 +1,4 @@
-from threading import Thread
+from .threads import Thread
 from typing import Callable
 
 
@@ -16,6 +16,4 @@ class Spawner[R, **P]:
         return runner
 
     def _build_thread(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> Thread:
-        thread = Thread(target=func, args=args, kwargs=kwargs, daemon=True)
-        thread.start()
-        return thread
+        return Thread.spawn(func, *args, **kwargs)
