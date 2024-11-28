@@ -1,4 +1,4 @@
-from oodle import spawn, Spawner
+from .spawners import spawn, Spawner
 
 
 class ThreadGroup:
