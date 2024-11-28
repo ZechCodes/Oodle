@@ -9,8 +9,8 @@ class Thread:
     def is_alive(self):
         return self._thread.is_alive()
 
-    def wait(self):
-        self._thread.join()
+    def wait(self, timeout: float | None=None):
+        self._thread.join(timeout)
 
     @classmethod
     def spawn(cls, target, *args, **kwargs):
