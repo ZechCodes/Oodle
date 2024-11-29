@@ -24,7 +24,6 @@ class InterruptibleThread(_Thread):
         return self._shield_lock
 
     def run(self):
-        setprofile(self._profile_thread)
         try:
             super().run()
         except Exception as e:
@@ -36,15 +35,10 @@ class InterruptibleThread(_Thread):
         else:
             if self._stop_callback:
                 self._stop_callback()
-        finally:
-            setprofile(None)
 
     def stop(self, timeout: float = 0):
 
 
-    def _profile_thread(self, frame, event, obj):
-        if self._stop_event.is_set():
-            raise ExitThread
 
 
 class Thread:
