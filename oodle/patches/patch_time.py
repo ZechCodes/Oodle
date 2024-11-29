@@ -1,8 +1,7 @@
 import sys
-import threading
 from functools import cache
 import time
-from .utilities import sleep
+from ..utilities import sleep
 
 
 class TimeProxy:
@@ -14,5 +13,4 @@ class TimeProxy:
         return getattr(time, item)
 
 
-def patch_runtime():
-    sys.modules["time"] = TimeProxy()
+sys.modules["time"] = TimeProxy()
