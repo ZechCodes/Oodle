@@ -6,9 +6,11 @@ class Spawner[R, **P]:
     def __init__(
         self,
         thread_builder: Callable[P, Thread] | None = None,
-        stop_callback: Callable[[], None] | None = None
+        cancel_callback: Callable[[], None] | None = None,
+        stop_callback: Callable[[], None] | None = None,
     ):
         self._thread_builder = thread_builder or self._build_thread
+        self._cancel_callback = cancel_callback
         self._stop_callback = stop_callback
 
     def __getitem__(self, func: Callable[P, R]) -> Callable[P, Thread]:
@@ -21,7 +23,7 @@ class Spawner[R, **P]:
         return runner
 
     def _build_thread(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> Thread:
-        return Thread.spawn(func, args, kwargs, stop_callback=self._stop_callback)
+        return Thread.spawn(func, args, kwargs, stop_callback=self._stop_callback, cancel_callback=self._cancel_callback)
 
 
 spawn = Spawner()
