@@ -1,8 +1,9 @@
 from queue import Queue
-from threading import Event
-from time import sleep
+from threading import Event, Lock
 
-from oodle import spawn, ThreadGroup, Channel, Lock
+import pytest
+
+from oodle import Shield, spawn, ThreadGroup, Channel, sleep
 
 
 def test_thread_group():
@@ -80,3 +81,13 @@ def test_thread_lock_release_on_stop():
     t.stop()
 
     assert l.locked() is False
+
+
+def test_thread_shields():
+    def foo():
+        with Shield():
+            sleep(100)
+
+    t = spawn[foo]()
+    with pytest.raises(TimeoutError):
+        t.stop(0.1)
