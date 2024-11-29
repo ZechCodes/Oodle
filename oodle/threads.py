@@ -16,8 +16,12 @@ class InterruptibleThread(_Thread):
         **kwargs
     ):
         super().__init__(*args, **kwargs)
+        self._shield_lock = Lock()
         self._cancel_callback = cancel_callback
         self._stop_callback = stop_callback
+    @property
+    def shield(self) -> Lock:
+        return self._shield_lock
 
     def run(self):
         setprofile(self._profile_thread)
