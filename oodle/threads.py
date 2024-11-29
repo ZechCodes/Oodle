@@ -7,7 +7,7 @@ class ExitThread(Exception):
     ...
 
 
-class StoppableThread(_Thread):
+class InterruptibleThread(_Thread):
     def __init__(
         self,
         *args,
@@ -49,7 +49,7 @@ class StoppableThread(_Thread):
 
 
 class Thread:
-    def __init__(self, thread: StoppableThread, stop_callback: Callable[[], None] | None=None):
+    def __init__(self, thread: InterruptibleThread, stop_callback: Callable[[], None] | None=None):
         self._thread = thread
         self._stop_callback = stop_callback
 
@@ -68,7 +68,7 @@ class Thread:
 
     @classmethod
     def spawn(cls, target, args, kwargs, stop_callback: Callable[[], None] | None=None, cancel_callback: Callable[[], None] | None=None):
-        thread = StoppableThread(
+        thread = InterruptibleThread(
             target=target,
             args=args,
             kwargs=kwargs,
