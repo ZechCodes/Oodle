@@ -37,8 +37,8 @@ class InterruptibleThread(_Thread):
         finally:
             setprofile(None)
 
-    def stop(self):
         self._stop_event.set()
+    def stop(self, timeout: float = 0):
 
         for lock in self.acquired_locks:
             lock.release()
@@ -57,11 +57,11 @@ class Thread:
     def is_alive(self):
         return self._thread.is_alive()
 
-    def stop(self):
+    def stop(self, timeout: float = 0):
         if not self.is_alive:
             return
 
-        self._thread.stop()
+        self._thread.stop(timeout)
 
     def wait(self, timeout: float | None=None):
         self._thread.join(timeout)
