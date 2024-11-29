@@ -16,7 +16,6 @@ class InterruptibleThread(_Thread):
         **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self.acquired_locks = set()
         self._cancel_callback = cancel_callback
         self._stop_callback = stop_callback
 
@@ -38,8 +37,6 @@ class InterruptibleThread(_Thread):
 
     def stop(self, timeout: float = 0):
 
-        for lock in self.acquired_locks:
-            lock.release()
 
     def _profile_thread(self, frame, event, obj):
         if self._stop_event.is_set():
