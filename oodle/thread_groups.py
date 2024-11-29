@@ -19,4 +19,4 @@ class ThreadGroup:
             if thread.is_alive:
                 thread.wait()
 
-        return True
+        return

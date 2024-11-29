@@ -1,8 +1,8 @@
 from queue import Queue
-from threading import Lock
+from threading import Event
+from time import sleep
 
-from oodle.thread_groups import ThreadGroup
-from oodle.channels import Channel
+from oodle import spawn, ThreadGroup, Channel, Lock
 
 
 def test_thread_group():
@@ -23,22 +23,19 @@ def test_thread_group():
 
 
 def test_channels():
-    l1 = Lock()
-    l2 = Lock()
-
-    l1.acquire()
-    l2.acquire()
+    e1 = Event()
+    e2 = Event()
 
     def foo(channel: Channel):
-        with l1:
-            channel.put("World")
-            l2.release()
+        e1.wait()
+        channel.put("World")
+        e2.set()
 
     def bar(channel: Channel):
         channel.put("Hello")
-        l1.release()
-        with l2:
-            channel.put("!!!")
+        e1.set()
+        e2.wait()
+        channel.put("!!!")
 
 
     with ThreadGroup() as spawn:
@@ -51,3 +48,35 @@ def test_channels():
     assert y == "World"
     assert z == "!!!"
     assert c.is_empty
+
+
+def test_thread_stopping():
+    e = Event()
+    def foo(channel: Channel):
+        channel.put("World")
+        e.set()
+        sleep(1000)
+        channel.put("!!!")
+
+    c = Channel()
+    t = spawn[foo](c)
+    e.wait()
+    t.stop()
+
+    assert ["World"] == list(c)
+
+
+def test_thread_lock_release_on_stop():
+    l = Lock()
+    e = Event()
+
+    def foo():
+        with l:
+            e.set()
+            sleep(100)
+
+    t = spawn[foo]()
+    e.wait()
+    t.stop()
+
+    assert l.locked() is False
