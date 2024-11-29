@@ -1,15 +1,18 @@
 import sys
 import threading
-from oodle.locks import Lock
+from functools import cache
+import time
+from .utilities import sleep
 
 
-class ThreadingProxy:
+class TimeProxy:
+    @cache
     def __getattr__(self, item):
-        if item == "Lock":
-            return Lock
+        if item == "sleep":
+            return sleep
 
-        return getattr(threading, item)
+        return getattr(time, item)
 
 
-def inject_hooks():
-    sys.modules["threading"] = ThreadingProxy()
+def patch_runtime():
+    sys.modules["time"] = TimeProxy()
