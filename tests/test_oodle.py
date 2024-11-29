@@ -6,20 +6,20 @@ from oodle import spawn, ThreadGroup, Channel, Lock
 
 
 def test_thread_group():
-    def add_to_queue(q: Queue, l: Lock, value: int):
-        with l:
-            q.put(value)
+    def add_to_queue(q: Queue, e: Event, value: int):
+        e.wait()
+        q.put(value)
 
-    q = Queue()
-    l = Lock()
+    queue = Queue()
+    event = Event()
     with ThreadGroup() as spawn:
-        with l:
-            for i in range(10):
-                spawn[add_to_queue](q, l, i)
+        for i in range(10):
+            spawn[add_to_queue](queue, event, i)
 
-            assert q.qsize() == 0
+        assert queue.qsize() == 0
+        event.set()
 
-    assert q.qsize() == 10
+    assert queue.qsize() == 10
 
 
 def test_channels():

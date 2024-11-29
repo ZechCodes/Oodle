@@ -3,8 +3,13 @@ from typing import Callable
 
 
 class Spawner[R, **P]:
-    def __init__(self, thread_builder: Callable[P, Thread] | None = None):
+    def __init__(
+        self,
+        thread_builder: Callable[P, Thread] | None = None,
+        stop_callback: Callable[[], None] | None = None
+    ):
         self._thread_builder = thread_builder or self._build_thread
+        self._stop_callback = stop_callback
 
     def __getitem__(self, func: Callable[P, R]) -> Callable[P, Thread]:
         if not callable(func):
@@ -16,7 +21,7 @@ class Spawner[R, **P]:
         return runner
 
     def _build_thread(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> Thread:
-        return Thread.spawn(func, *args, **kwargs)
+        return Thread.spawn(func, args, kwargs, stop_callback=self._stop_callback)
 
 
 spawn = Spawner()

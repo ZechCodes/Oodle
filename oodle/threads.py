@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from sys import setprofile
 from threading import Thread as _Thread, Event
 
@@ -7,10 +8,11 @@ class ExitThread(Exception):
 
 
 class StoppableThread(_Thread):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, stop_callback: Callable[[], None] | None = None,  **kwargs):
         super().__init__(*args, **kwargs)
         self._stop_event = Event()
         self.acquired_locks = set()
+        self._stop_callback = stop_callback
 
     def run(self):
         setprofile(self._profile_thread)
@@ -18,6 +20,11 @@ class StoppableThread(_Thread):
             super().run()
         except ExitThread:
             pass
+        finally:
+            setprofile(None)
+            if self._stop_callback:
+                self._stop_callback()
+
 
     def stop(self):
         self._stop_event.set()
@@ -31,22 +38,25 @@ class StoppableThread(_Thread):
 
 
 class Thread:
-    def __init__(self, thread: StoppableThread):
+    def __init__(self, thread: StoppableThread, stop_callback: Callable[[], None] | None=None):
         self._thread = thread
+        self._stop_callback = stop_callback
 
     @property
     def is_alive(self):
         return self._thread.is_alive()
 
     def stop(self):
-        if self.is_alive:
-            self._thread.stop()
+        if not self.is_alive:
+            return
+
+        self._thread.stop()
 
     def wait(self, timeout: float | None=None):
         self._thread.join(timeout)
 
     @classmethod
-    def spawn(cls, target, *args, **kwargs):
-        thread = StoppableThread(target=target, args=args, kwargs=kwargs, daemon=True)
+    def spawn(cls, target, args, kwargs, stop_callback: Callable[[], None] | None=None):
+        thread = StoppableThread(target=target, args=args, kwargs=kwargs, stop_callback=stop_callback, daemon=True)
         thread.start()
         return cls(thread)
