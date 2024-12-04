@@ -73,9 +73,9 @@ class InterruptibleThread(_Thread):
             ctypes.py_object(exception),
         )
 
-    def _run_callback(self, callback: Callable[[], None] | None):
+    def _run_callback[**P](self, callback: Callable[P, None] | None, *args: P.args, **kwargs: P.kwargs):
         if callback is not None:
-            callback()
+            callback(*args, **kwargs)
 
 
 class Thread:
