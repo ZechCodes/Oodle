@@ -6,8 +6,9 @@ from .spawners import spawn, Spawner
 class ThreadGroup:
     def __init__(self):
         self._threads = []
-        self._cancel_event = Event()
         self._stop_event = Event()
+        self._exception_mutex = Mutex()
+        self._exception: ThreadExceptionInfo | None = None
 
         self._spawner = Spawner(self._build_thread)
 
@@ -22,6 +23,18 @@ class ThreadGroup:
 
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+    def thread_encountered_exception(self, thread: Thread, exception):
+        if self._stop_event.is_set():
+            return
+
+        with self._exception_mutex:
+            if not self._exception:
+                self._exception = ThreadExceptionInfo(thread, exception)
+                self.stop()
+
+    def thread_stopped(self, thread: Thread):
+        self._stop_event.set()
+
         while any(thread.is_alive for thread in self._threads):
             self._stop_event.wait()
             self._stop_event.clear()
