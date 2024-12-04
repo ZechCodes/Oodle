@@ -15,14 +15,14 @@ class InterruptibleThread(_Thread):
     def __init__(
         self,
         *args,
-        cancel_callback: Callable[[], None] | None = None,
+        exception_callback: Callable[[Exception], None] | None = None,
         stop_callback: Callable[[], None] | None = None,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self._cancel_callback = cancel_callback
         self._pending_stop_event = Event()
         self._shield_lock = Lock()
+        self._exception_callback = exception_callback
         self._stop_callback = stop_callback
 
     @property
@@ -37,10 +37,9 @@ class InterruptibleThread(_Thread):
         try:
             super().run()
         except Exception as e:
-            self._run_callback(self._cancel_callback)
             if not isinstance(e, ExitThread):
-                raise
-        else:
+                self._run_callback(self._exception_callback, e)
+        finally:
             self._run_callback(self._stop_callback)
 
     def stop(self, timeout: float = 0):
@@ -80,9 +79,8 @@ class InterruptibleThread(_Thread):
 
 
 class Thread:
-    def __init__(self, thread: InterruptibleThread, stop_callback: Callable[[], None] | None=None):
+    def __init__(self, thread: InterruptibleThread):
         self._thread = thread
-        self._stop_callback = stop_callback
 
     @property
     def is_alive(self):
@@ -103,8 +101,6 @@ class Thread:
         target: Callable[[Any, ...], Any],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-        stop_callback: Callable[[], None] | None=None,
-        cancel_callback: Callable[[], None] | None=None
         group: "ThreadGroup | None" = None,
     ):
         thread = InterruptibleThread(
