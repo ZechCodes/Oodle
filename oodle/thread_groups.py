@@ -13,7 +13,7 @@ class ThreadExceptionInfo:
 
 class ThreadGroup:
     def __init__(self):
-        self._threads = []
+        self._threads, self._running_threads = [], []
         self._stop_event = Event()
         self._exception_mutex = Mutex()
         self._exception: ThreadExceptionInfo | None = None
@@ -28,6 +28,7 @@ class ThreadGroup:
     def _build_thread(self, func, *args, **kwargs):
         thread = Spawner(group=self)[func](*args, **kwargs)
         self._threads.append(thread)
+        self._running_threads.append(thread)
         return thread
 
     def stop(self):
@@ -49,10 +50,11 @@ class ThreadGroup:
                 self.stop()
 
     def thread_stopped(self, thread: Thread):
+        self._running_threads.remove(thread)
         self._stop_event.set()
 
     def wait(self):
-        while any(thread.is_alive for thread in self._threads):
+        while any(thread.is_alive for thread in self._running_threads):
             self._stop_event.wait()
 
             if self._shutdown_event.is_set():
