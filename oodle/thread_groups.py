@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from threading import Event, Semaphore, Thread
+from threading import Event, Thread
+from typing import Callable
 
 from .mutex import Mutex
 from .spawners import Spawner
@@ -26,10 +27,16 @@ class ThreadGroup:
         return self._spawner
 
     def _build_thread(self, func, *args, **kwargs):
-        thread = Spawner(group=self)[func](*args, **kwargs)
+        ready = Event()
+        thread = Spawner(group=self)[self._runner](func, ready, *args, **kwargs)
         self._threads.append(thread)
         self._running_threads.append(thread)
+        ready.set()
         return thread
+
+    def _runner[**P](self, func: Callable[P, None], ready: Event, *args: P.args, **kwargs: P.kwargs):
+        ready.wait()
+        func(*args, **kwargs)
 
     def stop(self):
         self._shutdown_event.set()
@@ -50,11 +57,7 @@ class ThreadGroup:
                 self.stop()
 
     def thread_stopped(self, thread: Thread):
-        try:
-            self._running_threads.remove(thread)
-        except ValueError:
-            pass
-
+        self._running_threads.remove(thread)
         self._stop_event.set()
 
     def wait(self):

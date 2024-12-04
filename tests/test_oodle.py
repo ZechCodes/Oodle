@@ -10,7 +10,9 @@ from oodle import Shield, spawn, ThreadGroup, Channel, sleep
 
 def test_thread_group():
     def add_to_queue(q: Queue, e: Event, value: int):
+        print("Waiting")
         e.wait()
+        print(f"Adding to queue {i}")
         q.put(value)
 
     queue = Queue()
