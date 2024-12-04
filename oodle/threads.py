@@ -1,7 +1,11 @@
 import ctypes
 from collections.abc import Callable
 from threading import Thread as _Thread, Event, Lock
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from oodle import ThreadGroup
 
 
 class ExitThread(Exception):
@@ -102,6 +106,7 @@ class Thread:
         kwargs: dict[str, Any],
         stop_callback: Callable[[], None] | None=None,
         cancel_callback: Callable[[], None] | None=None
+        group: "ThreadGroup | None" = None,
     ):
         thread = InterruptibleThread(
             target=target,

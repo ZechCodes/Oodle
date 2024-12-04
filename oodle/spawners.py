@@ -1,17 +1,18 @@
 from .threads import Thread
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
+
+if TYPE_CHECKING:
+    from . import ThreadGroup
 
 class Spawner[R, **P]:
     def __init__(
         self,
         thread_builder: Callable[P, Thread] | None = None,
-        cancel_callback: Callable[[], None] | None = None,
-        stop_callback: Callable[[], None] | None = None,
+        group: "ThreadGroup | None" = None,
     ):
         self._thread_builder = thread_builder or self._build_thread
-        self._cancel_callback = cancel_callback
-        self._stop_callback = stop_callback
+        self._group = group
 
     def __getitem__(self, func: Callable[P, R]) -> Callable[P, Thread]:
         if not callable(func):
@@ -23,7 +24,7 @@ class Spawner[R, **P]:
         return runner
 
     def _build_thread(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> Thread:
-        return Thread.spawn(func, args, kwargs, stop_callback=self._stop_callback, cancel_callback=self._cancel_callback)
+        return Thread.spawn(func, args, kwargs, group=self._group)
 
 
 spawn = Spawner()
