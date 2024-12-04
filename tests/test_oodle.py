@@ -1,5 +1,7 @@
+from functools import partial
 from queue import Queue
 from threading import Event, Lock
+from unittest.mock import sentinel
 
 import pytest
 
@@ -13,9 +15,9 @@ def test_thread_group():
 
     queue = Queue()
     event = Event()
-    with ThreadGroup() as spawn:
+    with ThreadGroup() as group:
         for i in range(10):
-            spawn[add_to_queue](queue, event, i)
+            group.spawn[add_to_queue](queue, event, i)
 
         assert queue.qsize() == 0
         event.set()
@@ -39,16 +41,37 @@ def test_channels():
         channel.put("!!!")
 
 
-    with ThreadGroup() as spawn:
+    with ThreadGroup() as group:
         c = Channel()
-        spawn[foo](c)
-        spawn[bar](c)
+        group.spawn[foo](c)
+        group.spawn[bar](c)
 
     x, y, z = c
     assert x == "Hello"
     assert y == "World"
     assert z == "!!!"
     assert c.is_empty
+
+
+def test_thread_group_error():
+    e1 = Event()
+    e2 = Event()
+
+    def foo_error():
+        e1.wait()
+        raise ValueError
+
+    def foo_event():
+        sleep(0.1)
+        e2.set()
+
+    with pytest.raises(ValueError):
+        with ThreadGroup() as group:
+            group.spawn[foo_error]()
+            group.spawn[foo_event]()
+            e1.set()
+
+    assert not e2.is_set()
 
 
 def test_thread_stopping():
@@ -91,3 +114,54 @@ def test_thread_shields():
     t = spawn[foo]()
     with pytest.raises(TimeoutError):
         t.stop(0.1)
+
+
+def test_channel_get_first():
+    l1, l2, l3 = Lock(), Lock(), Lock()
+
+    def f1(channel: Channel):
+        with l1:
+            sleep(1)
+            channel.put("f1")
+
+    def f2(channel: Channel):
+        with l2:
+            sleep(1)
+            channel.put("f2")
+
+    def f3(channel: Channel):
+        with l3:
+            channel.put("f3")
+
+    result = Channel.get_first(f1, f2, f3)
+    assert result == "f3"
+    assert not l1.locked()
+    assert not l2.locked()
+    assert not l3.locked()
+
+
+def test_channel_get_first_error():
+    l1, l2, l3 = Lock(), Lock(), Lock()
+
+    def f1(channel: Channel):
+        with l1:
+            sleep(1)
+            channel.put("f1")
+
+    def f2(channel: Channel):
+        with l2:
+            sleep(1)
+            channel.put("f2")
+
+    def f3(channel: Channel):
+        with l3:
+            raise ValueError
+
+    result = sentinel = object()
+    with pytest.raises(ValueError):
+        result = Channel.get_first(f1, f2, f3)
+
+    assert not l1.locked()
+    assert not l2.locked()
+    assert not l3.locked()
+    assert result is sentinel
