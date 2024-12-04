@@ -82,6 +82,9 @@ class Thread:
     def __init__(self, thread: InterruptibleThread):
         self._thread = thread
 
+    def __repr__(self):
+        return f"<oodle.Thread {self._thread}>"
+
     @property
     def is_alive(self):
         return self._thread.is_alive()
