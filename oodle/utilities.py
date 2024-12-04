@@ -1,10 +1,19 @@
 import threading
 import time
 
+from oodle.threads import ExitThread
+
 
 def sleep(seconds: float, /):
     if hasattr(threading.current_thread(), "pending_stop_event"):
-        threading.current_thread().pending_stop_event.wait(seconds)
+        exiting = False
+        try:
+            threading.current_thread().pending_stop_event.wait(seconds)
+        except SystemError:
+            exiting = True
+
+        if exiting:
+            raise ExitThread
     else:
         iterations, remainder = divmod(seconds, 0.01)
         for _ in range(int(iterations)):
