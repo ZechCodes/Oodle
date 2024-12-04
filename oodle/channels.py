@@ -1,6 +1,7 @@
 from queue import Queue
 from typing import Callable
 
+import oodle
 
 
 class Channel[T]:
@@ -49,3 +50,17 @@ class Channel[T]:
             raise ValueError("Channel is closed")
 
         return self._queue.get()
+
+    @classmethod
+    def get_first(cls, *funcs: "Callable[[Channel[T]], None]") -> T:
+        def on_put_callback(_):
+            group.stop()
+
+        with cls(on_put_callback=on_put_callback) as channel:
+            with oodle.ThreadGroup() as group:
+                for func in funcs:
+                    group.spawn[func](channel)
+
+            result = channel.get()
+
+        return result
