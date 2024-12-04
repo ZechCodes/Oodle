@@ -106,13 +106,21 @@ class Thread:
         kwargs: dict[str, Any],
         group: "ThreadGroup | None" = None,
     ):
+        def group_exception_callback(exception: Exception):
+            group.thread_encountered_exception(oodle_thread, exception)
+
+        def group_stop_callback():
+            group.thread_stopped(oodle_thread)
+
         thread = InterruptibleThread(
             target=target,
             args=args,
             kwargs=kwargs,
-            cancel_callback=cancel_callback,
-            stop_callback=stop_callback,
-            daemon=True
+            daemon=True,
+            exception_callback=group_exception_callback if group else None,
+            stop_callback=group_stop_callback if group else None,
         )
+
+        oodle_thread = cls(thread)
         thread.start()
-        return cls(thread)
+        return oodle_thread
