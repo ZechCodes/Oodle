@@ -2,8 +2,8 @@ from queue import Queue
 from typing import Callable
 
 
-class Channel:
-    def __init__(self):
+
+class Channel[T]:
         self._queue = Queue()
 
     def __enter__(self):
@@ -30,7 +30,6 @@ class Channel:
     def is_empty(self) -> bool:
         return self._queue.empty()
 
-    def put(self, value):
     def close(self):
         self._queue.shutdown(True)
         self._queue = None
@@ -41,7 +40,7 @@ class Channel:
 
         self._queue.put(value)
 
-    def get(self):
+    def get(self) -> T:
         if self._queue is None:
             raise ValueError("Channel is closed")
 
