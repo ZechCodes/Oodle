@@ -4,7 +4,9 @@ from typing import Callable
 
 
 class Channel[T]:
+    def __init__(self, *, on_put_callback: Callable[[T], None] | None = None):
         self._queue = Queue()
+        self._on_put_callback = on_put_callback
 
     def __enter__(self):
         return self
@@ -39,6 +41,8 @@ class Channel[T]:
             raise ValueError("Channel is closed")
 
         self._queue.put(value)
+        if self._on_put_callback:
+            self._on_put_callback(value)
 
     def get(self) -> T:
         if self._queue is None:
