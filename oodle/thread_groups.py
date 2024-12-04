@@ -50,7 +50,11 @@ class ThreadGroup:
                 self.stop()
 
     def thread_stopped(self, thread: Thread):
-        self._running_threads.remove(thread)
+        try:
+            self._running_threads.remove(thread)
+        except ValueError:
+            pass
+
         self._stop_event.set()
 
     def wait(self):
