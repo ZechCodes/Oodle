@@ -21,6 +21,10 @@ class ThreadGroup:
         self._threads.append(thread)
         return thread
 
+    def stop(self):
+        self._shutdown_event.set()
+        self._stop_event.set()
+
 
     def __exit__(self, exc_type, exc_val, exc_tb):
     def thread_encountered_exception(self, thread: Thread, exception):
