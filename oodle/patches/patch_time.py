@@ -13,4 +13,5 @@ class TimeProxy:
         return getattr(time, item)
 
 
-sys.modules["time"] = TimeProxy()
+def patch_time():
+    sys.modules["time"] = TimeProxy()
