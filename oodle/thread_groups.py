@@ -16,7 +16,7 @@ class ThreadGroup:
         return self._spawner
 
     def _build_thread(self, func, *args, **kwargs):
-        thread = Spawner(stop_callback=self._stop_event.set, cancel_callback=self._cancel_event.set)[func](*args, **kwargs)
+        thread = Spawner(group=self)[func](*args, **kwargs)
         self._threads.append(thread)
         return thread
 
