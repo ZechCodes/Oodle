@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "oodle"
-version = "0.1.1"
+version = "0.1.2"
 description = "Oodle is a package that makes it easier to manage threads."
 authors = ["Zech Zimmerman <hi@zech.codes>"]
 license = "MIT"
