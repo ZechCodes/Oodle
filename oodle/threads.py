@@ -1,7 +1,6 @@
 import ctypes
-from collections.abc import Callable
 from threading import Thread as _Thread, Event, Lock
-from typing import Any, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 
 if TYPE_CHECKING:
