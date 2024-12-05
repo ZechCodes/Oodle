@@ -1,18 +1,14 @@
-[tool.poetry]
+[project]
 name = "oodle"
 version = "0.1.4"
 description = "Oodle is a package that makes it easier to manage threads."
-authors = ["Zech Zimmerman <hi@zech.codes>"]
-license = "MIT"
 readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+license = "MIT"
+authors = ["Zech Zimmerman <hi@zech.codes>"]
 
-[tool.poetry.dependencies]
-python = "^3.13"
-
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.3"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+]
