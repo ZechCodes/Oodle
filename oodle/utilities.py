@@ -1,26 +1,36 @@
 import threading
 import time
 
-from oodle.threads import ExitThread, Thread
-
+from oodle.threads import ExitThread, Thread, InterruptibleThread
 
 def sleep(seconds: float, /):
-    if hasattr(threading.current_thread(), "pending_stop_event"):
-        exiting = False
-        try:
-            threading.current_thread().pending_stop_event.wait(seconds)
-        except SystemError:
-            exiting = True
+    match threading.current_thread():
+        case InterruptibleThread() as thread:
+            _sleep_using_event(seconds, thread)
 
-        if exiting:
-            raise ExitThread
-    else:
+        case _:
+            _sleep_periodically(seconds)
+
+
+def _sleep_periodically(seconds: float):
         iterations, remainder = divmod(seconds, 0.01)
         for _ in range(int(iterations)):
             time.sleep(0.01)
 
         if remainder:
             time.sleep(remainder)
+
+
+def _sleep_using_event(seconds: float, thread: InterruptibleThread):
+    try:
+        event_set = thread.stopping.wait(seconds)
+    except SystemError:
+        exiting = True
+    else:
+        exiting = event_set
+
+    if exiting:
+        raise ExitThread
 
 
 def wait_for(thread_or_iterator, /, *threads: Thread, timeout: float | None = None):
