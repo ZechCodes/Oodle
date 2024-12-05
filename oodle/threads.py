@@ -1,7 +1,9 @@
 import ctypes
+import time
 from threading import Thread as _Thread, Event, Lock
 from typing import Any, Callable, TYPE_CHECKING
 
+from oodle.mutex import Mutex
 
 if TYPE_CHECKING:
     from oodle import ThreadGroup
@@ -20,18 +22,29 @@ class InterruptibleThread(_Thread):
         **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self._pending_stop_event = Event()
-        self._shield_lock = Lock()
+        self._stopping = Event()
+        self._shield_mutex = Mutex()
         self._exception_callback = exception_callback
         self._stop_callback = stop_callback
+        self._done = Event()
 
     @property
-    def pending_stop_event(self) -> Event:
-        return self._pending_stop_event
+    def done(self) -> Event:
+        return self._done
 
     @property
-    def shield(self) -> Lock:
-        return self._shield_lock
+    def stopping(self) -> Event:
+        return self._stopping
+
+    @property
+    def shield(self) -> Mutex:
+        return self._shield_mutex
+
+    def is_alive(self):
+        if super().is_alive():
+            return True
+
+        return not self._done.is_set()
 
     def run(self):
         try:
@@ -40,32 +53,29 @@ class InterruptibleThread(_Thread):
             if not isinstance(e, ExitThread):
                 self._run_callback(self._exception_callback, e)
         finally:
+            self._done.set()
             self._run_callback(self._stop_callback)
 
     def stop(self, timeout: float = 0):
-        if not self.shield.locked():
-            self._pending_stop_event.set()
+        start = time.monotonic()
 
-        counter = 0
-        fractional_timeout = timeout / 100 if timeout > 0 else None
-        while self.is_alive():
-            if self.shield.locked():
-                if not self.shield.acquire(timeout=fractional_timeout):
-                    break
+        def get_timeout_duration():
+            elapsed = time.monotonic() - start
+            if elapsed < timeout:
+                return min(0.01, timeout - elapsed)
 
-                self.pending_stop_event.set()
-            else:
-                self.throw(ExitThread())
-                self.join(fractional_timeout)
+            raise TimeoutError("Failed to stop thread within timeout")
 
-            counter += 1
-            if counter > 100 and timeout > 0:
-                break
+        if not timeout:
+            get_timeout_duration = lambda: None
 
-        else:
-            return
+        while self.shield.is_held and not self.done.is_set():
+            self.shield.acquire(timeout=get_timeout_duration())
 
-        raise TimeoutError("Failed to stop thread")
+        self._stopping.set()
+        while not self.done.is_set():
+            self.throw(ExitThread())
+            self.join(timeout=get_timeout_duration())
 
     def throw(self, exception: Exception):
         ctypes.pythonapi.PyThreadState_SetAsyncExc(
