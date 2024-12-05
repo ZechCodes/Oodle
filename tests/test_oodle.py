@@ -1,7 +1,5 @@
-from functools import partial
 from queue import Queue
 from threading import Event, Lock
-from unittest.mock import sentinel
 
 import pytest
 
@@ -10,9 +8,7 @@ from oodle import Shield, spawn, ThreadGroup, Channel, sleep
 
 def test_thread_group():
     def add_to_queue(q: Queue, e: Event, value: int):
-        print("Waiting")
         e.wait()
-        print(f"Adding to queue {i}")
         q.put(value)
 
     queue = Queue()
@@ -86,8 +82,8 @@ def test_thread_stopping():
 
     c = Channel()
     t = spawn[foo](c)
-    e.wait()
-    t.stop()
+    assert e.wait(0.1), "Should never timeout"
+    t.stop(0.1)
 
     assert ["World"] == list(c)
 
@@ -109,11 +105,15 @@ def test_thread_lock_release_on_stop():
 
 
 def test_thread_shields():
+    shields_up = Event()
+
     def foo():
         with Shield():
+            shields_up.set()
             sleep(100)
 
     t = spawn[foo]()
+    shields_up.wait()
     with pytest.raises(TimeoutError):
         t.stop(0.1)
 
