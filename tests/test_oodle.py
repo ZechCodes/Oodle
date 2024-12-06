@@ -69,7 +69,7 @@ def test_thread_group_error():
             group.spawn[foo_event]()
             e1.set()
 
-    assert not e2.is_set()
+    assert e2.is_set() is False
 
 
 def test_thread_stopping():
@@ -137,9 +137,9 @@ def test_channel_get_first():
 
     result = Channel.get_first(f1, f2, f3)
     assert result == "f3"
-    assert not l1.locked()
-    assert not l2.locked()
-    assert not l3.locked()
+    assert l1.locked() is False
+    assert l2.locked() is False
+    assert l3.locked() is False
 
 
 def test_channel_get_first_error():

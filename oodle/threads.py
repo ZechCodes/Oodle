@@ -1,7 +1,8 @@
 import ctypes
 import time
+from itertools import cycle
 from threading import Thread as _Thread, Event, Lock
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING, Generator
 
 from oodle.mutex import Mutex
 
@@ -27,6 +28,8 @@ class InterruptibleThread(_Thread):
         self._exception_callback = exception_callback
         self._stop_callback = stop_callback
         self._done = Event()
+        self._internal_lock = Lock()
+        self._stop_lock = Lock()
 
     @property
     def done(self) -> Event:
@@ -48,42 +51,70 @@ class InterruptibleThread(_Thread):
 
     def run(self):
         try:
-            super().run()
+            try:
+                super().run()
+            finally:
+                self._safely_acquire_internal_lock()
+
         except Exception as e:
-            if not isinstance(e, ExitThread):
+            exit_exceptions = ExitThread
+            if self._stopping.is_set():
+                exit_exceptions |= SystemError
+
+            if not isinstance(e, exit_exceptions):
                 self._run_callback(self._exception_callback, e)
+
         finally:
-            self._done.set()
+            self.done.set()
             self._run_callback(self._stop_callback)
+            self._internal_lock.release()
 
     def stop(self, timeout: float = 0):
-        start = time.monotonic()
+        timeout_duration = generate_timeout_durations(timeout)
+        if self.done.is_set() or self._stopping.is_set() or not self._stop_lock.acquire(blocking=False):
+            return
 
-        def get_timeout_duration():
-            elapsed = time.monotonic() - start
-            if elapsed < timeout:
-                return min(0.01, timeout - elapsed)
+        try:
+            while self.shield.is_held and not self.done.is_set():
+                self.shield.acquire(timeout=next(timeout_duration))
 
-            raise TimeoutError("Failed to stop thread within timeout")
+            self._stopping.set()
 
-        if not timeout:
-            get_timeout_duration = lambda: None
+            try:
+                while not self.done.is_set():
+                    self.throw(ExitThread())
+                    self.join(timeout=next(timeout_duration) or None)
 
-        while self.shield.is_held and not self.done.is_set():
-            self.shield.acquire(timeout=get_timeout_duration())
-
-        self._stopping.set()
-        while not self.done.is_set():
-            self.throw(ExitThread())
-            self.join(timeout=get_timeout_duration())
+            finally:
+                self.shield.release()
+        finally:
+            self._stop_lock.release()
 
     def throw(self, exception: Exception):
-        ctypes.pythonapi.PyThreadState_SetAsyncExc(
-            ctypes.c_long(self.ident),
-            ctypes.py_object(exception),
-        )
+        if self._done.is_set() or self._stopping.is_set() or not self._internal_lock.acquire(blocking=False):
+            return
 
-    def _run_callback[**P](self, callback: Callable[P, None] | None, *args: P.args, **kwargs: P.kwargs):
+        try:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                ctypes.c_long(self.ident),
+                ctypes.py_object(exception),
+            )
+        finally:
+            self._internal_lock.release()
+
+    def _safely_acquire_internal_lock(self):
+        try:
+            self._internal_lock.acquire()
+        except SystemError:
+            try:
+                self._internal_lock.release()
+            except RuntimeError:
+                pass
+
+            self._internal_lock.acquire()
+
+    @staticmethod
+    def _run_callback[**P](callback: Callable[P, None] | None, *args: P.args, **kwargs: P.kwargs):
         if callback is not None:
             callback(*args, **kwargs)
 
@@ -99,8 +130,17 @@ class Thread:
     def is_alive(self):
         return self._thread.is_alive()
 
+    @property
+    def is_done(self):
+        match self._thread:
+            case InterruptibleThread():
+                return self._thread.done.is_set()
+
+            case _:
+                return not self.is_alive
+
     def stop(self, timeout: float = 0):
-        if not self.is_alive:
+        if self.is_done:
             return
 
         self._thread.stop(timeout)
@@ -134,3 +174,17 @@ class Thread:
         oodle_thread = cls(thread)
         thread.start()
         return oodle_thread
+
+
+def generate_timeout_durations(
+    timeout: float, clock: Callable[[], float] = time.monotonic, step: float = 0.1
+) -> Generator[float, None, None]:
+    if not timeout:
+        yield from cycle([0])
+        return
+
+    start = clock()
+    while (elapsed := clock() - start) < timeout:
+        yield min(step, timeout - elapsed)
+
+    raise TimeoutError("Failed to stop thread within timeout")
