@@ -1,38 +1,41 @@
 from dataclasses import dataclass
 from threading import Event, Thread
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 from .mutex import Mutex
 from .spawners import Spawner
 
+if TYPE_CHECKING:
+    from oodle.tasks import Task
+
 
 @dataclass
-class ThreadExceptionInfo:
-    thread: Thread
+class TaskExceptionInfo:
+    task: "Task"
     exception: Exception
 
 
 class ThreadGroup:
     def __init__(self):
-        self._threads, self._running_threads = [], []
+        self._tasks, self._running_tasks = [], []
         self._stop_event = Event()
         self._exception_mutex = Mutex()
-        self._exception: ThreadExceptionInfo | None = None
+        self._exception: TaskExceptionInfo | None = None
         self._shutdown_event = Event()
 
-        self._spawner = Spawner(self._build_thread)
+        self._spawner = Spawner(self._build_task)
 
     @property
     def spawn(self) -> Spawner:
         return self._spawner
 
-    def _build_thread(self, func, *args, **kwargs):
+    def _build_task(self, func, *args, **kwargs):
         ready = Event()
-        thread = Spawner(group=self)[self._runner](func, ready, *args, **kwargs)
-        self._threads.append(thread)
-        self._running_threads.append(thread)
+        task = Spawner(group=self)[self._runner](func, ready, *args, **kwargs)
+        self._tasks.append(task)
+        self._running_tasks.append(task)
         ready.set()
-        return thread
+        return task
 
     def _runner[**P](self, func: Callable[P, None], ready: Event, *args: P.args, **kwargs: P.kwargs):
         ready.wait()
@@ -42,30 +45,30 @@ class ThreadGroup:
         self._shutdown_event.set()
         self._stop_event.set()
 
-    def _stop_threads(self):
-        for thread in self._threads:
-            if thread.is_alive:
-                thread.stop()
+    def _stop_tasks(self):
+        for task in self._tasks:
+            if task.is_running:
+                task.stop()
 
-    def thread_encountered_exception(self, thread: Thread, exception):
+    def task_encountered_exception(self, task: "Task", exception):
         if self._stop_event.is_set():
             return
 
         with self._exception_mutex:
             if not self._exception:
-                self._exception = ThreadExceptionInfo(thread, exception)
+                self._exception = TaskExceptionInfo(task, exception)
                 self.stop()
 
-    def thread_stopped(self, thread: Thread):
-        self._running_threads.remove(thread)
+    def task_stopped(self, task: "Task"):
+        self._running_tasks.remove(task)
         self._stop_event.set()
 
     def wait(self):
-        while any(thread.is_alive for thread in self._running_threads):
+        while any(thread.is_alive for thread in self._running_tasks):
             self._stop_event.wait()
 
             if self._shutdown_event.is_set():
-                self._stop_threads()
+                self._stop_tasks()
 
                 if self._exception:
                     raise self._exception.exception

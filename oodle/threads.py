@@ -1,190 +1,106 @@
 import ctypes
-import time
-from itertools import cycle
-from threading import Thread as _Thread, Event, Lock
-from typing import Any, Callable, TYPE_CHECKING, Generator
+import threading
+from functools import wraps, partial
+from threading import Thread as _Thread, Event, Lock, RLock
+from typing import Callable, Generator, Self
 
-from oodle.mutex import Mutex
-
-if TYPE_CHECKING:
-    from oodle import ThreadGroup
-
-
-class ExitThread(Exception):
-    ...
-
-
-class InterruptibleThread(_Thread):
-    def __init__(
-        self,
-        *args,
-        exception_callback: Callable[[Exception], None] | None = None,
-        stop_callback: Callable[[], None] | None = None,
-        **kwargs
-    ):
-        super().__init__(*args, **kwargs)
-        self._stopping = Event()
-        self._shield_mutex = Mutex()
-        self._exception_callback = exception_callback
-        self._stop_callback = stop_callback
-        self._done = Event()
-        self._internal_lock = Lock()
-        self._stop_lock = Lock()
-
-    @property
-    def done(self) -> Event:
-        return self._done
-
-    @property
-    def stopping(self) -> Event:
-        return self._stopping
-
-    @property
-    def shield(self) -> Mutex:
-        return self._shield_mutex
-
-    def is_alive(self):
-        if super().is_alive():
-            return True
-
-        return not self._done.is_set()
-
-    def run(self):
-        try:
-            try:
-                super().run()
-            finally:
-                self._safely_acquire_internal_lock()
-
-        except Exception as e:
-            exit_exceptions = ExitThread
-            if self._stopping.is_set():
-                exit_exceptions |= SystemError
-
-            if not isinstance(e, exit_exceptions):
-                self._run_callback(self._exception_callback, e)
-
-        finally:
-            self.done.set()
-            self._run_callback(self._stop_callback)
-            self._internal_lock.release()
-
-    def stop(self, timeout: float = 0):
-        timeout_duration = generate_timeout_durations(timeout)
-        if self.done.is_set() or self._stopping.is_set() or not self._stop_lock.acquire(blocking=False):
-            return
-
-        try:
-            while self.shield.is_held and not self.done.is_set():
-                self.shield.acquire(timeout=next(timeout_duration))
-
-            self._stopping.set()
-
-            try:
-                while not self.done.is_set():
-                    self.throw(ExitThread())
-                    self.join(timeout=next(timeout_duration) or None)
-
-            finally:
-                self.shield.release()
-        finally:
-            self._stop_lock.release()
-
-    def throw(self, exception: Exception):
-        if self._done.is_set() or self._stopping.is_set() or not self._internal_lock.acquire(blocking=False):
-            return
-
-        try:
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(
-                ctypes.c_long(self.ident),
-                ctypes.py_object(exception),
-            )
-        finally:
-            self._internal_lock.release()
-
-    def _safely_acquire_internal_lock(self):
-        try:
-            self._internal_lock.acquire()
-        except SystemError:
-            try:
-                self._internal_lock.release()
-            except RuntimeError:
-                pass
-
-            self._internal_lock.acquire()
-
-    @staticmethod
-    def _run_callback[**P](callback: Callable[P, None] | None, *args: P.args, **kwargs: P.kwargs):
-        if callback is not None:
-            callback(*args, **kwargs)
+import oodle
+from oodle.exceptions import ExitThread
+from oodle.utilities import safely_acquire, generate_timeout_durations, abort_concurrent_calls
 
 
 class Thread:
-    def __init__(self, thread: InterruptibleThread):
-        self._thread = thread
+    def __init__(
+        self,
+        runner: Callable[[], None],
+        *,
+        on_done: Callable[[Self], None] | None = None,
+        on_exception: Callable[[Exception, Self], None] | None = None,
+    ):
+        self._internal_lock = Lock()
+        self._stop_lock = Lock()
+        self._shield_lock = RLock()
+
+        self._done = Event()
+        self._stopping = Event()
+
+        self._on_done = on_done
+        self._on_exception = on_exception
+
+        self._runner = runner
+        self._thread = _Thread(target=self._run, daemon=True)
+        self._thread.start()
 
     def __repr__(self):
-        return f"<oodle.Thread {self._thread}>"
+        return f"<oodle.Thread {self._thread.name} {self._thread.ident}>"
 
     @property
-    def is_alive(self):
-        return self._thread.is_alive()
+    def running(self):
+        return not self._done.is_set()
 
-    @property
-    def is_done(self):
-        match self._thread:
-            case InterruptibleThread():
-                return self._thread.done.is_set()
+    @abort_concurrent_calls
+    def stop(self, timeout: float = 0, wait: bool = False):
+        timeout_duration = generate_timeout_durations(timeout)
+        if self._thread.ident == threading.get_ident():
+            raise ExitThread
 
-            case _:
-                return not self.is_alive
-
-    def stop(self, timeout: float = 0):
-        if self.is_done:
+        if not self.running and not self._stop_lock.acquire(blocking=False):
             return
 
-        self._thread.stop(timeout)
+        if not self._shield_lock.acquire(timeout=next(timeout_duration)):
+            return
+
+        with self._shield_lock:
+            self._stopping.set()
+            self._throw()
+            if wait:
+                self.wait(next(timeout_duration))
 
     def wait(self, timeout: float | None=None):
-        self._thread.join(timeout)
+        self._done.wait(timeout=timeout)
+
+    def _handle_exception(self, e: Exception):
+        shutdown_exceptions = ExitThread
+        if self._stopping.is_set():
+            shutdown_exceptions |= SystemError
+
+        if isinstance(e, shutdown_exceptions):
+            return
+
+        if self._on_exception:
+            self._on_exception(e, self)
+
+        raise e
+
+    def _run(self):
+        oodle.thread_locals.thread = self
+        oodle.thread_locals.shield_lock = self._shield_lock
+        try:
+            try:
+                self._runner()
+            finally:
+                safely_acquire(self._internal_lock)
+                self._done.set()
+
+        except Exception as e:
+            self._handle_exception(e)
+
+        finally:
+            if self._on_done:
+                self._on_done(self)
+
+            self._internal_lock.release()
+
+    def _throw(self):
+        if self._internal_lock.acquire(blocking=False):
+            try:
+                ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                    ctypes.c_long(self._thread.ident),
+                    ctypes.py_object(ExitThread),
+                )
+            finally:
+                self._internal_lock.release()
 
     @classmethod
-    def spawn(
-        cls,
-        target: Callable[[Any, ...], Any],
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-        group: "ThreadGroup | None" = None,
-    ):
-        def group_exception_callback(exception: Exception):
-            group.thread_encountered_exception(oodle_thread, exception)
-
-        def group_stop_callback():
-            group.thread_stopped(oodle_thread)
-
-        thread = InterruptibleThread(
-            target=target,
-            args=args,
-            kwargs=kwargs,
-            daemon=True,
-            exception_callback=group_exception_callback if group else None,
-            stop_callback=group_stop_callback if group else None,
-        )
-
-        oodle_thread = cls(thread)
-        thread.start()
-        return oodle_thread
-
-
-def generate_timeout_durations(
-    timeout: float, clock: Callable[[], float] = time.monotonic, step: float = 0.1
-) -> Generator[float, None, None]:
-    if not timeout:
-        yield from cycle([0])
-        return
-
-    start = clock()
-    while (elapsed := clock() - start) < timeout:
-        yield min(step, timeout - elapsed)
-
-    raise TimeoutError("Failed to stop thread within timeout")
+    def run[**P](cls, func: Callable[[P], None], *args: P.args, **kwargs: P.kwargs) -> Self:
+        return cls(partial(func, *args, **kwargs))

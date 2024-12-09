@@ -1,8 +1,4 @@
-from .channels import Channel
-from .shields import Shield
-from .spawners import spawn
-from .thread_groups import ThreadGroup
-from .utilities import *
+import threading as _threading
 
 
-__all__ = ["Channel", "Shield", "ThreadGroup", "spawn"]
+thread_locals = _threading.local()

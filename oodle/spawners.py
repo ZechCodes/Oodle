@@ -24,7 +24,9 @@ class Spawner[R, **P]:
         return runner
 
     def _build_thread(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> Thread:
-        return Thread.spawn(func, args, kwargs, group=self._group)
+        thread = Thread()
+        thread.run(func, args, kwargs, group=self._group)
+        return thread
 
 
 spawn = Spawner()
