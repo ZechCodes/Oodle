@@ -1,24 +1,22 @@
-import threading
+from threading import RLock, current_thread
 
-from oodle.threads import InterruptibleThread
+import oodle
 
 
 class Shield:
-    def __init__(self, thread: InterruptibleThread | None = None):
-        self._thread = thread if thread else self._get_thread()
+    def __init__(self):
+        self.lock = self._get_lock()
 
     def __enter__(self):
-        self._thread.shield.acquire()
+        self.lock.acquire()
         return None
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._thread.shield.release()
+        self.lock.release()
         return
 
-    def _get_thread(self) -> InterruptibleThread:
-        match threading.current_thread():
-            case InterruptibleThread() as thread:
-                return thread
+    def _get_lock(self) -> RLock:
+        if hasattr(oodle.thread_locals, "shield_lock"):
+            return oodle.thread_locals.shield_lock
 
-            case _:
-                raise RuntimeError("Cannot use Shield outside of an InterruptibleThread")
+        raise Exception("Shields can only be used with threads created by Oodle")
