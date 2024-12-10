@@ -3,7 +3,8 @@ from threading import Event, Lock
 
 import pytest
 
-from oodle import Shield, spawn, ThreadGroup, Channel, sleep
+from oodle import Shield, ThreadGroup, Channel
+from oodle.utilities import sleep
 
 
 def test_thread_group():
@@ -15,7 +16,7 @@ def test_thread_group():
     event = Event()
     with ThreadGroup() as group:
         for i in range(10):
-            group.spawn[add_to_queue](queue, event, i)
+            group.run(add_to_queue, queue, event, i)
 
         assert queue.qsize() == 0
         event.set()

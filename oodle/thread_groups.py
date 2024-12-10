@@ -1,79 +1,27 @@
 from dataclasses import dataclass
-from threading import Event, Thread
-from typing import Callable, TYPE_CHECKING
-
-from .mutex import Mutex
-from .spawners import Spawner
-
-if TYPE_CHECKING:
-    from oodle.tasks import Task
+from functools import partial
+from threading import Event, Lock
+from typing import Callable, Generator
+from oodle.threads import Thread
 
 
 @dataclass
-class TaskExceptionInfo:
-    task: "Task"
+class ThreadExceptionInfo:
+    thread: "Thread"
     exception: Exception
+
+    def __iter__(self):
+        yield self.thread
+        yield self.exception
 
 
 class ThreadGroup:
     def __init__(self):
-        self._tasks, self._running_tasks = [], []
-        self._stop_event = Event()
-        self._exception_mutex = Mutex()
-        self._exception: TaskExceptionInfo | None = None
-        self._shutdown_event = Event()
-
-        self._spawner = Spawner(self._build_task)
-
-    @property
-    def spawn(self) -> Spawner:
-        return self._spawner
-
-    def _build_task(self, func, *args, **kwargs):
-        ready = Event()
-        task = Spawner(group=self)[self._runner](func, ready, *args, **kwargs)
-        self._tasks.append(task)
-        self._running_tasks.append(task)
-        ready.set()
-        return task
-
-    def _runner[**P](self, func: Callable[P, None], ready: Event, *args: P.args, **kwargs: P.kwargs):
-        ready.wait()
-        func(*args, **kwargs)
-
-    def stop(self):
-        self._shutdown_event.set()
-        self._stop_event.set()
-
-    def _stop_tasks(self):
-        for task in self._tasks:
-            if task.is_running:
-                task.stop()
-
-    def task_encountered_exception(self, task: "Task", exception):
-        if self._stop_event.is_set():
-            return
-
-        with self._exception_mutex:
-            if not self._exception:
-                self._exception = TaskExceptionInfo(task, exception)
-                self.stop()
-
-    def task_stopped(self, task: "Task"):
-        self._running_tasks.remove(task)
-        self._stop_event.set()
-
-    def wait(self):
-        while any(thread.is_alive for thread in self._running_tasks):
-            self._stop_event.wait()
-
-            if self._shutdown_event.is_set():
-                self._stop_tasks()
-
-                if self._exception:
-                    raise self._exception.exception
-
-            self._stop_event.clear()
+        self._threads, self._running_threads = [], []
+        self._exception_lock = Lock()
+        self._exceptions: list[ThreadExceptionInfo] = []
+        self._thread_event = Event()
+        self._stopping = Event()
 
     def __enter__(self):
         return self
@@ -81,3 +29,67 @@ class ThreadGroup:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.wait()
         return
+
+    @property
+    def running(self) -> bool:
+        return len(self._running_threads) > 0
+
+    def run[**P](self, func: Callable[P, None], *args: P.args, **kwargs: P.kwargs) -> Thread:
+        return self._create_thread(func, *args, **kwargs)
+
+    def stop(self):
+        self._stopping.set()
+        self._thread_event.set()
+
+    def wait(self):
+        while any(thread.running for thread in self._running_threads):
+            self._thread_event.wait()
+            self._thread_event.clear()
+
+            if self._stopping.is_set():
+                break
+
+        self._stop_threads()
+        if self._exceptions:
+            raise ExceptionGroup(
+                f"Exceptions encountered in {self.__class__.__name__}",
+                list(self._build_exceptions())
+            )
+
+    def _build_exceptions(self) -> Generator[Exception, None, None]:
+        for info in self._exceptions:
+            info.exception.add_note(f"Occurred in thread: {info.thread}")
+            yield info.exception
+
+    def _create_thread(self, func, *args, **kwargs):
+        ready = Event()
+        thread = Thread(
+            partial(self._runner, func, ready, *args, **kwargs),
+            on_done=self._thread_done,
+            on_exception=self._thread_encountered_exception,
+        )
+        self._threads.append(thread)
+        self._running_threads.append(thread)
+        ready.set()
+        return thread
+
+    def _stop_threads(self):
+        for thread in self._threads:
+            thread.stop(wait=True)
+
+    def _thread_done(self, thread: Thread):
+        self._running_threads.remove(thread)
+        self._thread_event.set()
+
+    def _thread_encountered_exception(self, exception: Exception, thread: Thread):
+        if not self.running:
+            return
+
+        with self._exception_lock:
+            self._exceptions.append(ThreadExceptionInfo(thread, exception))
+            self.stop()
+
+    @staticmethod
+    def _runner[**P](func: Callable[P, None], ready: Event, *args: P.args, **kwargs: P.kwargs):
+        ready.wait()
+        func(*args, **kwargs)
