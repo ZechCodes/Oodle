@@ -45,12 +45,16 @@ def _sleep_periodically(seconds: float):
 
 
 def _sleep_on_thread(seconds: float, thread: "Thread"):
+    sleep_duration = generate_timeout_durations(seconds)
     try:
-        event_set = thread.wait(seconds)
+        while not thread.wait(timeout=min(0.01, next(sleep_duration))):
+            pass
     except SystemError:
         exiting = True
+    except TimeoutError:
+        exiting = False
     else:
-        exiting = event_set # The thread has exited
+        exiting = True # The thread has exited
 
     if exiting:
         raise ExitThread
