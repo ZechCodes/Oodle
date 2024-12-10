@@ -53,8 +53,8 @@ class Thread:
             self._stopping.set()
             self._throw()
 
-    def wait(self, timeout: float | None=None):
-        self._done.wait(timeout=timeout)
+    def wait(self, timeout: float | None=None) -> bool:
+        return self._done.wait(timeout=timeout)
 
     def _handle_exception(self, e: Exception):
         shutdown_exceptions = ExitThread
