@@ -18,7 +18,6 @@ class Thread:
         on_exception: Callable[[Exception, Self], None] | None = None,
     ):
         self._internal_lock = Lock()
-        self._stop_lock = Lock()
         self._shield_lock = RLock()
 
         self._done = Event()
@@ -44,7 +43,7 @@ class Thread:
         if self._thread.ident == threading.get_ident():
             raise ExitThread
 
-        if not self.running and not self._stop_lock.acquire(blocking=False):
+        if not self.running:
             return
 
         if not self._shield_lock.acquire(timeout=next(timeout_duration)):
