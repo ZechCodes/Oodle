@@ -86,5 +86,7 @@ def generate_timeout_durations(
 def safely_acquire(lock: threading.Lock):
     try:
         lock.acquire()
-    except SystemError:
-        lock.acquire(blocking=False)
+    except (ExitThread, SystemError):
+        pass
+
+    lock.acquire(blocking=False)
