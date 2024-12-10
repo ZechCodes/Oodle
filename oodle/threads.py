@@ -1,8 +1,8 @@
 import ctypes
 import threading
-from functools import wraps, partial
+from functools import partial
 from threading import Thread as _Thread, Event, Lock, RLock
-from typing import Callable, Generator, Self
+from typing import Callable, Self
 
 import oodle
 from oodle.exceptions import ExitThread
@@ -46,7 +46,7 @@ class Thread:
         if not self.running:
             return
 
-        if not self._shield_lock.acquire(timeout=next(timeout_duration)):
+        if not self._shield_lock.acquire(timeout=next(timeout_duration) if timeout > 0 else -1):
             return
 
         with self._shield_lock:
