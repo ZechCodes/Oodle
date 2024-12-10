@@ -77,6 +77,7 @@ class Thread:
                 self._runner()
             finally:
                 safely_acquire(self._internal_lock)
+                self._stopping.set()
                 self._done.set()
 
         except Exception as e:
