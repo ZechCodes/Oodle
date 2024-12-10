@@ -75,7 +75,8 @@ class ThreadGroup:
 
     def _stop_threads(self):
         for thread in self._threads:
-            thread.stop(wait=True)
+            thread.stop()
+            thread.wait()
 
     def _thread_done(self, thread: Thread):
         self._running_threads.remove(thread)

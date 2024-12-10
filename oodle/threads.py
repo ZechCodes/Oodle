@@ -38,7 +38,7 @@ class Thread:
         return not self._done.is_set()
 
     @abort_concurrent_calls
-    def stop(self, timeout: float = 0, wait: bool = False):
+    def stop(self, timeout: float = 0):
         timeout_duration = generate_timeout_durations(timeout)
         if self._thread.ident == threading.get_ident():
             raise ExitThread
@@ -52,8 +52,6 @@ class Thread:
         with self._shield_lock:
             self._stopping.set()
             self._throw()
-            if wait:
-                self.wait(next(timeout_duration))
 
     def wait(self, timeout: float | None=None):
         self._done.wait(timeout=timeout)
