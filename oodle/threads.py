@@ -47,7 +47,7 @@ class Thread:
             return
 
         if not self._shield_lock.acquire(timeout=next(timeout_duration) if timeout > 0 else -1):
-            return
+            raise TimeoutError
 
         with self._shield_lock:
             self._stopping.set()
