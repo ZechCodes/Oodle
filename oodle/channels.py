@@ -59,7 +59,7 @@ class Channel[T]:
         with cls(on_put_callback=on_put_callback) as channel:
             with oodle.ThreadGroup() as group:
                 for func in funcs:
-                    group.spawn[func](channel)
+                    group.run(func, channel)
 
             result = channel.get()
 
