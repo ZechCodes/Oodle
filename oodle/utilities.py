@@ -36,12 +36,12 @@ def sleep(seconds: float, /):
 
 
 def _sleep_periodically(seconds: float):
-        iterations, remainder = divmod(seconds, 0.01)
-        for _ in range(int(iterations)):
-            time.sleep(0.01)
+    iterations, remainder = divmod(seconds, 0.01)
+    for _ in range(int(iterations)):
+        time.sleep(0.01)
 
-        if remainder:
-            time.sleep(remainder)
+    if remainder:
+        time.sleep(remainder)
 
 
 def _sleep_on_thread(seconds: float, thread: "Thread"):
