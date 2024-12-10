@@ -3,7 +3,7 @@ from threading import Event, Lock
 
 import pytest
 
-from oodle import Shield, ThreadGroup, Channel
+from oodle import Shield, ThreadGroup, Channel, Thread
 from oodle.utilities import sleep
 
 
@@ -42,8 +42,8 @@ def test_channels():
 
     with ThreadGroup() as group:
         c = Channel()
-        group.spawn[foo](c)
-        group.spawn[bar](c)
+        group.run(foo, c)
+        group.run(bar, c)
 
     x, y, z = c
     assert x == "Hello"
@@ -64,12 +64,17 @@ def test_thread_group_error():
         sleep(0.1)
         e2.set()
 
-    with pytest.raises(ValueError):
+    try:
         with ThreadGroup() as group:
-            group.spawn[foo_error]()
-            group.spawn[foo_event]()
+            group.run(foo_error)
+            group.run(foo_event)
             e1.set()
+    except *ValueError:
+        raised_value_error = True
+    else:
+        raised_value_error = False
 
+    assert raised_value_error is True
     assert e2.is_set() is False
 
 
@@ -82,7 +87,7 @@ def test_thread_stopping():
         channel.put("!!!")
 
     c = Channel()
-    t = spawn[foo](c)
+    t = Thread.run(foo, c)
     assert e.wait(0.1), "Should never timeout"
     t.stop(0.1)
 
@@ -98,9 +103,10 @@ def test_thread_lock_release_on_stop():
             e.set()
             sleep(100)
 
-    t = spawn[foo]()
+    t = Thread.run(foo)
     e.wait()
     t.stop()
+    t.wait()
 
     assert l.locked() is False
 
@@ -113,7 +119,7 @@ def test_thread_shields():
             shields_up.set()
             sleep(100)
 
-    t = spawn[foo]()
+    t = Thread.run(foo)
     shields_up.wait()
     with pytest.raises(TimeoutError):
         t.stop(0.1)
@@ -161,9 +167,13 @@ def test_channel_get_first_error():
             raise ValueError
 
     result = sentinel = object()
-    with pytest.raises(ValueError):
+    raised_value_error = False
+    try:
         result = Channel.get_first(f1, f2, f3)
+    except *ValueError:
+        raised_value_error = True
 
+    assert raised_value_error is True
     assert not l1.locked()
     assert not l2.locked()
     assert not l3.locked()
