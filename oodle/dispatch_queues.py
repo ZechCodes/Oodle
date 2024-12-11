@@ -2,7 +2,7 @@ from concurrent.futures import Future
 from functools import partial
 from queue import Queue
 from threading import Event
-from typing import Callable, Any
+from typing import Callable
 
 from oodle import Thread
 from oodle.exceptions import ExitThread
