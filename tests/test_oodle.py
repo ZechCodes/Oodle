@@ -4,7 +4,8 @@ from threading import Event, Lock
 import pytest
 
 from oodle import Shield, ThreadGroup, Channel, Thread
-from oodle.utilities import sleep
+from oodle.dispatch_queues import DispatchQueue
+from oodle.utilities import sleep, wait_for
 
 
 def test_thread_group():
@@ -178,3 +179,17 @@ def test_channel_get_first_error():
     assert not l2.locked()
     assert not l3.locked()
     assert result is sentinel
+
+
+def test_dispatch_queue():
+    def foo(v):
+        l.append(v)
+
+    def threaded_call_to_foo(v):
+        q.dispatch(foo, v)
+
+    l = []
+    q = DispatchQueue()
+    wait_for(Thread.run(threaded_call_to_foo, i) for i in range(10))
+
+    assert l == list(range(10))
