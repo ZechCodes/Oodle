@@ -34,7 +34,7 @@ class Thread:
         return f"<oodle.Thread {self._thread.name} {self._thread.ident}>"
 
     @property
-    def running(self):
+    def running(self) -> bool:
         return not self._done.is_set()
 
     @abort_concurrent_calls
