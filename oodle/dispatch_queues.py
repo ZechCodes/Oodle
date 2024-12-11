@@ -30,7 +30,6 @@ class DispatchQueue[**P, R]:
             try:
                 result = func()
             except Exception as e:
-                print(e)
                 shutdown_exceptions = ExitThread
                 if self._thread.stopping:
                     shutdown_exceptions |= SystemError
