@@ -37,6 +37,10 @@ class Thread:
     def running(self) -> bool:
         return not self._done.is_set()
 
+    @property
+    def stopping(self) -> bool:
+        return self._stopping.is_set()
+
     @abort_concurrent_calls
     def stop(self, timeout: float = 0):
         timeout_duration = generate_timeout_durations(timeout)
