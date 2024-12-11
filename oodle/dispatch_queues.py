@@ -15,7 +15,7 @@ class DispatchQueue[**P, R]:
         self._thread = Thread.run(self._dispatch)
         self._started.set()
 
-    def dispatch(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> Future[R]:
+    def dispatch(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
         future = Future()
         self._queue.put((future, partial(func, *args, **kwargs)))
         return future.result()
