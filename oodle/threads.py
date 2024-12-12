@@ -121,4 +121,15 @@ class Thread:
 
     @classmethod
     def run[**P](cls, func: Callable[P, None], *args: P.args, **kwargs: P.kwargs) -> Self:
-        return cls(partial(func, *args, **kwargs))
+        return _create(cls, partial(func, *args, **kwargs))
+
+
+def _create(cls, func) -> Thread:
+    started = Event()
+    def run():
+        started.set()
+        func()
+
+    thread = cls(run)
+    started.wait()
+    return thread
