@@ -67,6 +67,9 @@ class Thread:
             return self._done.wait(timeout=timeout)
         except (ExitThread, RuntimeError, SystemError):
             return False
+        finally:
+            if self._exception:
+                raise self._exception
 
 
     def _handle_exception(self, e: Exception) -> bool:
