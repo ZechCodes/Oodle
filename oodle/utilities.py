@@ -62,13 +62,7 @@ def _sleep_on_thread(seconds: float, thread: "Thread"):
         raise ExitThread
 
 
-def wait_for(thread_or_iterator, /, *threads: "Thread", timeout: float | None = None):
-    if hasattr(thread_or_iterator, "__iter__"):
-        threads = list(thread_or_iterator)
-
-    else:
-        threads = [thread_or_iterator, *threads]
-
+def wait_for(*threads: "Thread", timeout: float | None = None):
     timeout_duration = generate_timeout_durations(timeout)
     while any(thread.running for thread in threads):
         sleep(min(0.01, next(timeout_duration)))
