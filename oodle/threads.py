@@ -60,7 +60,7 @@ class Thread:
     def wait(self, timeout: float | None=None) -> bool:
         try:
             return self._done.wait(timeout=timeout)
-        except RuntimeError:
+        except (ExitThread, RuntimeError, SystemError):
             return False
 
 
