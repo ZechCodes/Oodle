@@ -1,11 +1,16 @@
 from concurrent.futures import Future
 from functools import partial
 from queue import Queue
-from threading import Event
+from threading import Event, current_thread
 from typing import Callable
 
+import oodle
 from oodle import Thread
 from oodle.exceptions import ExitThread
+
+
+class IllegalDispatchException(Exception):
+    ...
 
 
 class DispatchQueue[**P, R]:
@@ -16,9 +21,15 @@ class DispatchQueue[**P, R]:
         self._started.set()
 
     def dispatch(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+        return self.dispatch_future(func, *args, **kwargs).result()
+
+    def dispatch_future(self, func: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> Future[R]:
+        if getattr(oodle.thread_locals, "thread", None) == self._thread:
+            raise IllegalDispatchException("Cannot dispatch on dispatch thread, will dead lock")
+
         future = Future()
         self._queue.put((future, partial(func, *args, **kwargs)))
-        return future.result()
+        return future
 
     def stop(self):
         self._thread.stop()
