@@ -183,22 +183,25 @@ def test_channel_get_first_error():
 
 
 def test_dispatch_queue():
-    def foo():
-        l.append("foo")
+    def foo(delay, message):
+        if delay:
+            sleep(delay)
 
-    def bar():
-        l.append("bar")
+        l.append(message)
 
-    def baz():
-        l.append("baz")
 
-    def threaded_call_to(f):
-        q.dispatch(f)
+    def threaded_call_to(f, event, message):
+        q.dispatch(f, event, message)
 
     l = []
     q = DispatchQueue()
-    wait_for(Thread.run(threaded_call_to, i) for i in islice(cycle([foo, bar, baz]), 3000))
-    assert all(batch == ("foo", "bar", "baz") for batch in batched(islice(cycle(["foo", "bar", "baz"]), 3000), 3))
+    wait_for(
+        [
+            Thread.run(threaded_call_to, foo, 0.01, "foo"),
+            Thread.run(threaded_call_to, foo, 0, "bar"),
+        ]
+    )
+    assert l == ["foo", "bar"]
 
 
 def test_dispatch_queue_doesnt_deadlock_on_own_thread():
