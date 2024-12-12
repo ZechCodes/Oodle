@@ -109,6 +109,6 @@ def queued_dispatch[**P, R](func: Callable[P, R]) -> Callable[P, R]:
 
     @wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        return queue.dispatch(func, *args, **kwargs)
+        return queue.safe_dispatch(func, *args, **kwargs)
 
     return wrapper
