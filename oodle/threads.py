@@ -64,18 +64,19 @@ class Thread:
             return False
 
 
-    def _handle_exception(self, e: Exception):
+    def _handle_exception(self, e: Exception) -> bool:
         shutdown_exceptions = ExitThread
         if self._stopping.is_set():
             shutdown_exceptions |= SystemError
 
         if isinstance(e, shutdown_exceptions):
-            return
+            return True
 
         if self._on_exception:
             self._on_exception(e, self)
 
-        raise e
+        return False
+
 
     def _run(self):
         oodle.thread_locals.thread = self
@@ -89,7 +90,8 @@ class Thread:
                 self._done.set()
 
         except Exception as e:
-            self._handle_exception(e)
+            if not self._handle_exception(e):
+                raise
 
         finally:
             if self._on_done:
