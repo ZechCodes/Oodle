@@ -232,6 +232,10 @@ def test_dispatch_queue_class():
             self.result.append("a_property")
             return "a_property"
 
+        @a_property.setter
+        def a_property(self, value):
+            self.result.append(value)
+
         def foo(self):
             self._do_delay(0.01)
             self.add_result("foo")
@@ -246,6 +250,7 @@ def test_dispatch_queue_class():
             sleep(duration)
 
     def access_property():
+        testing.a_property = "a_property_set"
         testing.a_property
 
     testing = Testing()
@@ -255,5 +260,5 @@ def test_dispatch_queue_class():
         Thread.run(testing.add_result, "baz"),
         Thread.run(access_property),
     )
-    assert testing.result == ["foo", "bar", "baz", "a_property"]
+    assert testing.result == ["foo", "bar", "baz", "a_property_set", "a_property"]
     assert testing.a_property == "a_property"

@@ -97,6 +97,12 @@ class QueuedDispatchDescriptor[**P, R]:
 
         return partial(instance._dispatch_queue.safe_dispatch, self.func, instance)
 
+    def __set__(self, instance, value):
+        if isinstance(self.func, property):
+            instance._dispatch_queue.safe_dispatch(self.func.fset, instance, value)
+        else:
+            self.func = value
+
 
 def queued_dispatch[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     queue = DispatchQueue()
