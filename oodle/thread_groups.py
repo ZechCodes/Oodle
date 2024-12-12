@@ -1,25 +1,13 @@
-from dataclasses import dataclass
 from functools import partial
 from threading import Event, Lock
 from typing import Callable, Generator
 from oodle.threads import Thread
 
 
-@dataclass
-class ThreadExceptionInfo:
-    thread: "Thread"
-    exception: Exception
-
-    def __iter__(self):
-        yield self.thread
-        yield self.exception
-
-
 class ThreadGroup:
     def __init__(self):
         self._threads, self._running_threads = [], []
         self._exception_lock = Lock()
-        self._exceptions: list[ThreadExceptionInfo] = []
         self._thread_event = Event()
         self._stopping = Event()
 
@@ -50,16 +38,11 @@ class ThreadGroup:
                 break
 
         self._stop_threads()
-        if self._exceptions:
+        if exceptions := [thread.exception for thread in self._threads if thread.exception]:
             raise ExceptionGroup(
                 f"Exceptions encountered in {self.__class__.__name__}",
-                list(self._build_exceptions())
+                exceptions,
             )
-
-    def _build_exceptions(self) -> Generator[Exception, None, None]:
-        for info in self._exceptions:
-            info.exception.add_note(f"Occurred in thread: {info.thread}")
-            yield info.exception
 
     def _create_thread(self, func, *args, **kwargs):
         ready = Event()
@@ -87,7 +70,6 @@ class ThreadGroup:
             return
 
         with self._exception_lock:
-            self._exceptions.append(ThreadExceptionInfo(thread, exception))
             self.stop()
 
     @staticmethod
