@@ -1,10 +1,11 @@
+from itertools import islice, cycle, batched
 from queue import Queue
 from threading import Event, Lock
 
 import pytest
 
 from oodle import Shield, ThreadGroup, Channel, Thread
-from oodle.dispatch_queues import DispatchQueue
+from oodle.dispatch_queues import DispatchQueue, IllegalDispatchException
 from oodle.utilities import sleep, wait_for
 
 
@@ -182,14 +183,33 @@ def test_channel_get_first_error():
 
 
 def test_dispatch_queue():
-    def foo(v):
-        l.append(v)
+    def foo():
+        l.append("foo")
 
-    def threaded_call_to_foo(v):
-        q.dispatch(foo, v)
+    def bar():
+        l.append("bar")
+
+    def baz():
+        l.append("baz")
+
+    def threaded_call_to(f):
+        q.dispatch(f)
 
     l = []
     q = DispatchQueue()
-    wait_for(Thread.run(threaded_call_to_foo, i) for i in range(10))
+    wait_for(Thread.run(threaded_call_to, i) for i in islice(cycle([foo, bar, baz]), 3000))
+    assert all(batch == ("foo", "bar", "baz") for batch in batched(islice(cycle(["foo", "bar", "baz"]), 3000), 3))
 
-    assert l == list(range(10))
+
+def test_dispatch_queue_doesnt_deadlock_on_own_thread():
+    def foo():
+        q.dispatch(bar)
+
+    def bar():
+        l.append("bar")
+
+    l = []
+    q = DispatchQueue()
+    with pytest.raises(IllegalDispatchException):
+        q.dispatch(foo)
+
