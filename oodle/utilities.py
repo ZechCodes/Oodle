@@ -73,6 +73,12 @@ def wait_for(thread_or_iterator, /, *threads: "Thread", timeout: float | None = 
     while any(thread.running for thread in threads):
         sleep(min(0.01, next(timeout_duration)))
 
+    if exceptions := [thread.exception for thread in threads if thread.exception]:
+        raise ExceptionGroup(
+            f"Exceptions encountered in {wait_for}",
+            exceptions,
+        )
+
 
 def generate_timeout_durations(
     timeout: float, clock: Callable[[], float] = time.monotonic
