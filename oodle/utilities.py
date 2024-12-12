@@ -48,7 +48,7 @@ def _sleep_on_thread(seconds: float, thread: "Thread"):
     sleep_duration = generate_timeout_durations(seconds)
     try:
         duration = min(0.01, next(sleep_duration))
-        while duration > 0 and not thread.wait(timeout=duration):
+        while duration > 0 and not thread.stopping and not thread.wait(timeout=duration):
             duration = min(0.01, next(sleep_duration))
 
     except SystemError:
