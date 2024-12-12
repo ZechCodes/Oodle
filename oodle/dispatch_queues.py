@@ -1,8 +1,9 @@
 from concurrent.futures import Future
-from functools import partial
+from functools import partial, wraps
 from queue import Queue
 from threading import Event, current_thread
-from typing import Callable
+from types import MethodType, FunctionType
+from typing import Callable, Self, overload, Type, Any
 
 import oodle
 from oodle import Thread
@@ -31,6 +32,12 @@ class DispatchQueue[**P, R]:
         self._queue.put((future, partial(func, *args, **kwargs)))
         return future
 
+    def safe_dispatch(self, func: Callable[P, R], *args, **kwargs: P.kwargs) -> R:
+        if getattr(oodle.thread_locals, "thread", None) == self._thread:
+            return func(*args, **kwargs)
+
+        return self.dispatch(func, *args, **kwargs)
+
     def stop(self):
         self._thread.stop()
 
@@ -52,3 +59,47 @@ class DispatchQueue[**P, R]:
             else:
                 future.set_result(result)
 
+
+class QueuedDispatcher:
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._dispatch_queue = DispatchQueue()
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        for name in dir(cls):
+            if name.startswith("_"):
+                continue
+
+            attr = getattr(cls, name)
+            if isinstance(attr, FunctionType):
+                setattr(cls, name, QueuedDispatchDecorator(attr))
+
+
+class QueuedDispatchDecorator[**P, R]:
+    def __init__(self, func: Callable[P, R]):
+        self.func = func
+
+    @overload
+    def __get__(self, instance: None, owner: Type) -> Self:
+        ...
+
+    @overload
+    def __get__(self, instance: QueuedDispatcher, owner: Type) -> Callable[P, R]:
+        ...
+
+    def __get__(self, instance: QueuedDispatcher | None, owner: Type) -> Callable[P, R] | Self:
+        if instance is None:
+            return self
+
+        return partial(instance._dispatch_queue.safe_dispatch, self.func, instance)
+
+
+def queued_dispatch[**P, R](func: Callable[P, R]) -> Callable[P, R]:
+    queue = DispatchQueue()
+
+    @wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        return queue.dispatch(func, *args, **kwargs)
+
+    return wrapper
