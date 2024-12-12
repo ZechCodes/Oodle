@@ -27,11 +27,16 @@ class Thread:
         self._on_exception = on_exception
 
         self._runner = runner
+        self._exception = None
         self._thread = _Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def __repr__(self):
         return f"<oodle.Thread {self._thread.name} {self._thread.ident}>"
+
+    @property
+    def exception(self) -> Exception | None:
+        return self._exception
 
     @property
     def running(self) -> bool:
@@ -91,6 +96,8 @@ class Thread:
 
         except Exception as e:
             if not self._handle_exception(e):
+                e.add_note(f"Occurred in thread: {self}")
+                self._exception = e
                 raise
 
         finally:
