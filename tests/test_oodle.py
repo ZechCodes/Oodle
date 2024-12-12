@@ -189,7 +189,6 @@ def test_dispatch_queue():
 
         l.append(message)
 
-
     def threaded_call_to(f, event, message):
         q.dispatch(f, event, message)
 
