@@ -5,7 +5,7 @@ import pytest
 
 from oodle import Shield, ThreadGroup, Channel, Thread
 from oodle.dispatch_queues import DispatchQueue, IllegalDispatchException, queued_dispatch, QueuedDispatcher
-from oodle.utilities import sleep, wait_for
+from oodle.utilities import sleep, wait_for, abort_concurrent_calls
 
 
 def test_thread_group():
@@ -262,3 +262,24 @@ def test_dispatch_queue_class():
     )
     assert testing.result == ["foo", "bar", "baz", "a_property_set", "a_property"]
     assert testing.a_property == "a_property"
+
+
+def test_concurrent_methods():
+    class Testing:
+        @abort_concurrent_calls
+        def foo(self, message):
+            r.add(message)
+            e.wait()
+
+    t1, t2 = Testing(), Testing()
+    e = Event()
+    r = set()
+    threads = [
+        Thread.run(t1.foo, "foo"),
+        Thread.run(t1.foo, "foo-no"),
+        Thread.run(t2.foo, "bar"),
+        Thread.run(t2.foo, "bar-no"),
+    ]
+    e.set()
+    wait_for(*threads)
+    assert r == {"foo", "bar"}

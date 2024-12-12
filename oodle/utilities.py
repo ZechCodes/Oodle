@@ -2,7 +2,8 @@ import threading
 import time
 from functools import wraps
 from itertools import cycle
-from typing import TYPE_CHECKING, Generator, Callable
+from typing import TYPE_CHECKING, Generator, Callable, Any
+from weakref import ref
 
 import oodle
 from oodle.exceptions import ExitThread
@@ -11,20 +12,60 @@ if TYPE_CHECKING:
     from oodle.threads import Thread
 
 
-def abort_concurrent_calls[**P](func: Callable[P, None]) -> Callable[P, None]:
-    func_lock = threading.Lock()
+class AbortConcurrentCallsFunctionWrapper[**P, R]:
+    def __init__(self, function: Callable[P, R]):
+        self.function = function
+        self.instances: dict[int | None, tuple[ref | None, Callable[P, R]]] = {}
 
-    @wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs):
-        if not func_lock.acquire(blocking=False):
-            return
+    def __call__(self, *args, **kwargs):
+        function = self._get_instance_function(None)
+        if not function:
+            function = self._wrap_in_lock(self.function, threading.Lock())
+            self._add_instance_function(None, function)
 
-        try:
-            func(*args, **kwargs)
-        finally:
-            func_lock.release()
+        return function
 
-    return wrapper
+    def __get__(self, instance, owner):
+        if not instance:
+            return self
+
+        function = self._get_instance_function(instance)
+        if not function:
+            function = self._wrap_in_lock(self.function.__get__(instance, owner), threading.Lock())
+            self._add_instance_function(instance, function)
+
+        return function
+
+    def _add_instance_function(self, instance: Any, locked_func: Callable[P, R]):
+        instance_id = id(instance)
+        def del_instance(_):
+            del self.instances[instance_id]
+
+        self.instances[instance_id] = (ref(instance, del_instance), locked_func)
+
+    def _get_instance_function(self, instance: Any) -> Callable[P, R] | None:
+        if id(instance) in self.instances:
+            return self.instances[id(instance)][1]
+
+        return None
+
+    @staticmethod
+    def _wrap_in_lock(func, lock):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not lock.acquire(blocking=False):
+                return
+
+            try:
+                return func(*args, **kwargs)
+            finally:
+                lock.release()
+
+        return wrapper
+
+
+def abort_concurrent_calls[**P, R](func: Callable[P, R]) -> Callable[P, R]:
+    return AbortConcurrentCallsFunctionWrapper[P, R](func)
 
 
 def sleep(seconds: float, /):
