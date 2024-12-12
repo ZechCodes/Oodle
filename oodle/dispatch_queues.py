@@ -73,10 +73,10 @@ class QueuedDispatcher:
 
             attr = getattr(cls, name)
             if isinstance(attr, FunctionType | property):
-                setattr(cls, name, QueuedDispatchDecorator(attr))
+                setattr(cls, name, QueuedDispatchDescriptor(attr))
 
 
-class QueuedDispatchDecorator[**P, R]:
+class QueuedDispatchDescriptor[**P, R]:
     def __init__(self, func: Callable[P, R]):
         self.func = func
 
