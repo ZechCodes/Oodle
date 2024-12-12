@@ -191,10 +191,8 @@ def test_dispatch_queue():
     l = []
     q = DispatchQueue()
     wait_for(
-        [
-            Thread.run(q.dispatch, foo, 0.01, "foo"),
-            Thread.run(q.dispatch, foo, 0, "bar"),
-        ]
+        Thread.run(q.dispatch, foo, 0.01, "foo"),
+        Thread.run(q.dispatch, foo, 0, "bar"),
     )
     assert l == ["foo", "bar"]
 
