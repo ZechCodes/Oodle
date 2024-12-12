@@ -108,5 +108,5 @@ class Thread:
                 self._internal_lock.release()
 
     @classmethod
-    def run[**P](cls, func: Callable[[P], None], *args: P.args, **kwargs: P.kwargs) -> Self:
+    def run[**P](cls, func: Callable[P, None], *args: P.args, **kwargs: P.kwargs) -> Self:
         return cls(partial(func, *args, **kwargs))
