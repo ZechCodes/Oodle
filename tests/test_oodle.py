@@ -1,11 +1,10 @@
-from itertools import islice, cycle, batched
 from queue import Queue
 from threading import Event, Lock
 
 import pytest
 
 from oodle import Shield, ThreadGroup, Channel, Thread
-from oodle.dispatch_queues import DispatchQueue, IllegalDispatchException
+from oodle.dispatch_queues import DispatchQueue, IllegalDispatchException, queued_dispatch, QueuedDispatcher
 from oodle.utilities import sleep, wait_for
 
 
@@ -211,4 +210,48 @@ def test_dispatch_queue_doesnt_deadlock_on_own_thread():
     q = DispatchQueue()
     with pytest.raises(IllegalDispatchException):
         q.dispatch(foo)
+
+
+def test_dispatch_queue_decorator():
+    @queued_dispatch
+    def foo(delay, message):
+        if delay:
+            sleep(delay)
+        l.append(message)
+
+    l = []
+    wait_for(
+        [
+            Thread.run(foo, 0.01, "foo"),
+            Thread.run(foo, 0, "bar"),
+        ]
+    )
+    assert l == ["foo", "bar"]
+
+
+def test_dispatch_queue_class():
+    class Testing(QueuedDispatcher):
+        def __init__(self):
+            super().__init__()
+            self.result = []
+
+        def foo(self):
+            self._do_delay(0.01)
+            self.add_result("foo")
+
+        def bar(self):
+            self.add_result("bar")
+
+        def add_result(self, message):
+            self.result.append(message)
+
+        def _do_delay(self, duration):
+            sleep(duration)
+
+    testing = Testing()
+    wait_for(
+        Thread.run(testing.foo),
+        Thread.run(testing.bar),
+    )
+    assert testing.result == ["foo", "bar"]
 
