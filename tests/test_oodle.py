@@ -189,15 +189,12 @@ def test_dispatch_queue():
 
         l.append(message)
 
-    def threaded_call_to(f, event, message):
-        q.dispatch(f, event, message)
-
     l = []
     q = DispatchQueue()
     wait_for(
         [
-            Thread.run(threaded_call_to, foo, 0.01, "foo"),
-            Thread.run(threaded_call_to, foo, 0, "bar"),
+            Thread.run(q.dispatch, foo, 0.01, "foo"),
+            Thread.run(q.dispatch, foo, 0, "bar"),
         ]
     )
     assert l == ["foo", "bar"]
