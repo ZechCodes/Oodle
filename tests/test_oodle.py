@@ -227,6 +227,11 @@ def test_dispatch_queue_class():
             super().__init__()
             self.result = []
 
+        @property
+        def a_property(self):
+            self.result.append("a_property")
+            return "a_property"
+
         def foo(self):
             self._do_delay(0.01)
             self.add_result("foo")
@@ -240,11 +245,15 @@ def test_dispatch_queue_class():
         def _do_delay(self, duration):
             sleep(duration)
 
+    def access_property():
+        testing.a_property
+
     testing = Testing()
     wait_for(
         Thread.run(testing.foo),
         Thread.run(testing.bar),
         Thread.run(testing.add_result, "baz"),
+        Thread.run(access_property),
     )
-    assert testing.result == ["foo", "bar", "baz"]
-
+    assert testing.result == ["foo", "bar", "baz", "a_property"]
+    assert testing.a_property == "a_property"

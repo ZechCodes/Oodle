@@ -72,7 +72,7 @@ class QueuedDispatcher:
                 continue
 
             attr = getattr(cls, name)
-            if isinstance(attr, FunctionType):
+            if isinstance(attr, FunctionType | property):
                 setattr(cls, name, QueuedDispatchDecorator(attr))
 
 
@@ -91,6 +91,9 @@ class QueuedDispatchDecorator[**P, R]:
     def __get__(self, instance: QueuedDispatcher | None, owner: Type) -> Callable[P, R] | Self:
         if instance is None:
             return self
+
+        if isinstance(self.func, property):
+            return instance._dispatch_queue.safe_dispatch(self.func.fget, instance)
 
         return partial(instance._dispatch_queue.safe_dispatch, self.func, instance)
 
