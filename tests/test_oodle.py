@@ -213,17 +213,16 @@ def test_dispatch_queue_doesnt_deadlock_on_own_thread():
 def test_dispatch_queue_decorator():
     @queued_dispatch
     def foo(delay, message):
+        e.set()
         if delay:
             sleep(delay)
         l.append(message)
 
     l = []
-    wait_for(
-        [
-            Thread.run(foo, 0.01, "foo"),
-            Thread.run(foo, 0, "bar"),
-        ]
-    )
+    e = Event()
+    thread = Thread.run(foo, 0.01, "foo")
+    e.wait()
+    wait_for(thread, Thread.run(foo, 0, "bar"))
     assert l == ["foo", "bar"]
 
 
@@ -246,10 +245,14 @@ def test_dispatch_queue_class():
         def _do_delay(self, duration):
             sleep(duration)
 
+    def run_foo():
+        e.set()
+        testing.foo()
+
     testing = Testing()
-    wait_for(
-        Thread.run(testing.foo),
-        Thread.run(testing.bar),
-    )
+    e = Event()
+    thread = Thread.run(run_foo)
+    e.wait()
+    wait_for(thread, Thread.run(testing.bar))
     assert testing.result == ["foo", "bar"]
 
