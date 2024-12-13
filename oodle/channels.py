@@ -5,6 +5,10 @@ import oodle
 
 
 class Channel[T]:
+    """A simple wrapper around a queue.Queue to make using them a bit simpler. It is a context manager so that the
+    channel can be closed automatically. It is also an iterator that can block while waiting for more results.
+
+    on_put_callback can be used to assign a function that is called when a new item is put into the channel."""
     def __init__(self, *, on_put_callback: Callable[[T], None] | None = None):
         self._queue = Queue()
         self._on_put_callback = on_put_callback
@@ -38,6 +42,8 @@ class Channel[T]:
         self._queue = None
 
     def put(self, value: T):
+        """Puts a value into the channel queue. Raises ValueError if the channel is closed. Calls on_put_callback when a
+        value is put."""
         if self._queue is None:
             raise ValueError("Channel is closed")
 
@@ -46,6 +52,8 @@ class Channel[T]:
             self._on_put_callback(value)
 
     def get(self) -> T:
+        """Gets a value from the channel queue. Raises ValueError if the channel is closed. Blocks until a value is
+        received."""
         if self._queue is None:
             raise ValueError("Channel is closed")
 
@@ -53,6 +61,8 @@ class Channel[T]:
 
     @classmethod
     def get_first(cls, *funcs: "Callable[[Channel[T]], None]") -> T:
+        """This classmethod runs all functions it is passed in a ThreadGroup and passes them a shared channel. When a
+        value is put into the channel the ThreadGroup is stopped and the value is returned from the channel."""
         def on_put_callback(_):
             group.stop()
 

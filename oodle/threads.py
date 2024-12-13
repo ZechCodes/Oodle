@@ -10,6 +10,7 @@ from oodle.utilities import safely_acquire, generate_timeout_durations, abort_co
 
 
 class Thread:
+    """A thread wrapper type that adds facilities for capturing exceptions and stopping the thread."""
     def __init__(
         self,
         runner: Callable[[], None],
@@ -36,18 +37,22 @@ class Thread:
 
     @property
     def exception(self) -> Exception | None:
+        """Any exception raised in the thread."""
         return self._exception
 
     @property
     def running(self) -> bool:
+        """Returns True if the thread has not finished running. This is True even before the thread begins running."""
         return not self._done.is_set()
 
     @property
     def stopping(self) -> bool:
+        """Returns True if the thread has stopped because of an exception or if Thread.stop has been called."""
         return self._stopping.is_set()
 
     @abort_concurrent_calls
     def stop(self, timeout: float = 0):
+        """"""
         timeout_duration = generate_timeout_durations(timeout)
         if self._thread.ident == threading.get_ident():
             raise ExitThread
@@ -84,7 +89,6 @@ class Thread:
             self._on_exception(e, self)
 
         return False
-
 
     def _run(self):
         oodle.thread_locals.thread = self

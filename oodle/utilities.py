@@ -12,10 +12,12 @@ if TYPE_CHECKING:
     from oodle.threads import Thread
 
 
-class AbortConcurrentCallsFunctionWrapper[**P, R]:
-    def __init__(self, function: Callable[P, R]):
+class AbortConcurrentCallsFunctionWrapper[**P]:
+    """Decorator that prevents a function from being called concurrently on separate threads. Concurrent calls return
+    immediately with a None return. It always returns None and drops any return the function has."""
+    def __init__(self, function: Callable[P, None]):
         self.function = function
-        self.instances: dict[int | None, tuple[ref | None, Callable[P, R]]] = {}
+        self.instances: dict[int | None, tuple[ref | None, Callable[P, None]]] = {}
 
     def __call__(self, *args, **kwargs):
         function = self._get_instance_function(None)
@@ -36,39 +38,44 @@ class AbortConcurrentCallsFunctionWrapper[**P, R]:
 
         return function
 
-    def _add_instance_function(self, instance: Any, locked_func: Callable[P, R]):
+    def _add_instance_function(self, instance: Any, locked_func: Callable[P, None]):
         instance_id = id(instance)
         def del_instance(_):
             del self.instances[instance_id]
 
         self.instances[instance_id] = (ref(instance, del_instance), locked_func)
 
-    def _get_instance_function(self, instance: Any) -> Callable[P, R] | None:
+    def _get_instance_function(self, instance: Any) -> Callable[P, None] | None:
         if id(instance) in self.instances:
             return self.instances[id(instance)][1]
 
         return None
 
     @staticmethod
-    def _wrap_in_lock(func, lock):
+    def _wrap_in_lock(func: Callable[P, None], lock: threading.Lock) -> Callable[P, None]:
         @wraps(func)
         def wrapper(*args, **kwargs):
             if not lock.acquire(blocking=False):
                 return
 
             try:
-                return func(*args, **kwargs)
+                func(*args, **kwargs)
             finally:
                 lock.release()
 
         return wrapper
 
 
-def abort_concurrent_calls[**P, R](func: Callable[P, R]) -> Callable[P, R]:
-    return AbortConcurrentCallsFunctionWrapper[P, R](func)
+def abort_concurrent_calls[**P](func: Callable[P, None]) -> Callable[P, None]:
+    """Decorator that prevents a function from being called concurrently on separate threads. Concurrent calls return
+    immediately with a None return. It always returns None and drops any return the function has."""
+    return AbortConcurrentCallsFunctionWrapper[P](func)
 
 
 def sleep(seconds: float, /):
+    """Sleep replacement that periodically gives control back to the interpreter to allow thrown exceptions to be
+    processed. If used within an Oodle thread it waits on the thread. Otherwise, time.sleep is used with very short
+    sleep durations."""
     if hasattr(oodle.thread_locals, "thread"):
         _sleep_on_thread(seconds, oodle.thread_locals.thread)
 
@@ -77,12 +84,14 @@ def sleep(seconds: float, /):
 
 
 def _sleep_periodically(seconds: float):
-    iterations, remainder = divmod(seconds, 0.01)
-    for _ in range(int(iterations)):
-        time.sleep(0.01)
-
-    if remainder:
-        time.sleep(remainder)
+    sleep_duration = generate_timeout_durations(seconds)
+    try:
+        duration = min(0.01, next(sleep_duration))
+        while duration > 0:
+            time.sleep(duration)
+            duration = min(0.01, next(sleep_duration))
+    except TimeoutError:
+        return
 
 
 def _sleep_on_thread(seconds: float, thread: "Thread"):
@@ -104,6 +113,8 @@ def _sleep_on_thread(seconds: float, thread: "Thread"):
 
 
 def wait_for(*threads: "Thread", timeout: float | None = None):
+    """Waits for multiple threads to complete. This raises an ExceptionGroup of all errors raised in each thread. It
+    does not stop threads for any reason."""
     timeout_duration = generate_timeout_durations(timeout)
     while any(thread.running for thread in threads):
         sleep(min(0.01, next(timeout_duration)))
@@ -118,6 +129,7 @@ def wait_for(*threads: "Thread", timeout: float | None = None):
 def generate_timeout_durations(
     timeout: float, clock: Callable[[], float] = time.monotonic
 ) -> Generator[float, None, None]:
+    """Yields the remaining time according to the given clock. It defaults to using the time.monotonic clock."""
     if not timeout:
         yield from cycle([0])
         return
@@ -131,6 +143,7 @@ def generate_timeout_durations(
 
 
 def safely_acquire(lock: threading.Lock):
+    """Attempts to acquire a lock without being interrupted by an ExitThread or SystemError."""
     try:
         lock.acquire()
     except (ExitThread, SystemError):

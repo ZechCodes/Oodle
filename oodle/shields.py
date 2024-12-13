@@ -4,6 +4,7 @@ import oodle
 
 
 class Shield:
+    """Shields allow critical code to run with the assurance that the thread won't be stopped before it finishes."""
     def __init__(self):
         self.lock = self._get_lock()
 

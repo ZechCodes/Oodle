@@ -5,6 +5,10 @@ from oodle.threads import Thread
 
 
 class ThreadGroup:
+    """Thread groups manage multiple threads, stopping them all if any raise an exception.
+
+    ThreadGroup can be used as a context manager. All exceptions raised in the threads are then raised in the calling
+    thread as an ExceptionGroup."""
     def __init__(self):
         self._threads, self._running_threads = [], []
         self._exception_lock = Lock()
@@ -20,16 +24,21 @@ class ThreadGroup:
 
     @property
     def running(self) -> bool:
+        """Returns true as long as there are threads running in the group."""
         return len(self._running_threads) > 0
 
     def run[**P](self, func: Callable[P, None], *args: P.args, **kwargs: P.kwargs) -> Thread:
+        """Runs a function in a thread that belongs to the thread group."""
         return self._create_thread(func, *args, **kwargs)
 
     def stop(self):
+        """Stops the thread group threads."""
         self._stopping.set()
         self._thread_event.set()
 
     def wait(self):
+        """Waits until all threads in the group stop. Raises all exceptions that occurred in the threads in the calling
+        thread as an ExceptionGroup."""
         while any(thread.running for thread in self._running_threads):
             self._thread_event.wait()
             self._thread_event.clear()
